@@ -1,0 +1,102 @@
+
+//+------------------------------------------------------------------+
+//|                                                AW Grids Maker MT5|
+//|                     Developed by Forex Robot Easy Team           |
+//|                        http://www.forexroboteasy.com              |
+//+------------------------------------------------------------------+
+
+//--- Include necessary trading functions
+#include <Trade\Trade.mqh>
+
+//--- Define input parameters
+input double Step=10;                    // Required step for grid construction
+input double VolumeMultiplier=1.0;       // Transaction volume multiplier
+input int NetworkDistance=10;            // Adjustable distance for order networks
+input int VolumeIncreaseRatio=2;         // Ratio of increasing transaction volume
+
+//--- Create an instance of the trading class
+CTrade trade;
+
+//--- Define the OnTick event handler
+void OnTick()
+{
+   //--- Get the symbol and check if the symbol is available for trading
+   string symbol=Symbol();
+   if(!trade.MarketInfo(symbol,MODE_TRADEALLOWED))
+   {
+      Print('Symbol ',symbol,' is not available for trading');
+      return;
+   }
+   
+   //--- Check if the symbol has pending orders
+   int total=trade.OrdersTotal();
+   if(total>0)
+   {
+      //--- Loop through all pending orders
+      for(int i=total-1;i>=0;i--)
+      {
+         //--- Select the order by its index
+         trade.SelectByIndex(i);
+         
+         //--- Check if the order is a grid order
+         if(trade.OrderType()==OP_BUYSTOP || trade.OrderType()==OP_SELLSTOP || trade.OrderType()==OP_BUYLIMIT || trade.OrderType()==OP_SELLLIMIT)
+         {
+            //--- Close the order
+            trade.Close();
+         }
+      }
+   }
+   
+   //--- Calculate the grid levels
+   double price=SymbolInfoDouble(symbol,SYMBOL_ASK);
+   double level=NormalizeDouble(price-Step*NetworkDistance,Digits());
+   
+   //--- Loop through the network distance
+   for(int i=0;i<=NetworkDistance;i++)
+   {
+      //--- Calculate the order price and volume
+      double orderPrice=NormalizeDouble(level+i*Step,Digits());
+      double orderVolume=NormalizeDouble(VolumeMultiplier*MathPow(VolumeIncreaseRatio,i),2);
+      
+      //--- Check if the order type is buy stop or sell stop
+      if(i%2==0)
+      {
+         //--- Open a buy stop order
+         trade.BuyStop(orderVolume,orderPrice,0,'Buy Stop',0,0,0);
+      }
+      else
+      {
+         //--- Open a sell stop order
+         trade.SellStop(orderVolume,orderPrice,0,'Sell Stop',0,0,0);
+      }
+   }
+   
+   //--- Print the grid levels
+   Print('Grid levels: ',level,' - ',NormalizeDouble(level+NetworkDistance*Step,Digits()));
+}
+
+//--- Define the OnDeinit event handler
+void OnDeinit(const int reason)
+{
+   //--- Close all open orders when the script is stopped
+   int total=trade.OrdersTotal();
+   if(total>0)
+   {
+      for(int i=total-1;i>=0;i--)
+      {
+         trade.SelectByIndex(i);
+         trade.Close();
+      }
+   }
+}
+
+//+------------------------------------------------------------------+
+//| Script program start function                                    |
+//+------------------------------------------------------------------+
+void OnStart()
+{
+   //--- Subscribe to the OnTick event
+   EventSetTimer(1);
+}
+
+//+------------------------------------------------------------------+
